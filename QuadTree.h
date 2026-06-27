@@ -30,13 +30,53 @@ struct Frontera{
     }
 
 
-    bool intersecta(const Frontera& rango)  {
+    bool intersecta( Frontera rango)  {
 
         return !(rango.x - rango.ancho > x + ancho ||
                  rango.x + rango.ancho < x - ancho ||
                  rango.y - rango.alto > y + alto ||
                  rango.y + rango.alto < y - alto);
     }
+    
+};
+
+
+class QuadTree {
+
+
+    private:
+
+
+    //atributos de quadtree
+
+        Frontera limite;            // los limites
+        int capacidadMaxima;        // capacida maxima por nodo
+        vector<Particle> particulas;        // vector guarda partiuclas en el nodo
+        bool dividido;              // bandera si fue dividido el nodo
+
+        
+
+        //punteros
+        QuadTree* noroeste;
+        QuadTree* noreste;
+        QuadTree* suroeste;
+        QuadTree* sureste;
+
+        
+
+        void subdividir();
+
+    public:
+        
+
+
+        QuadTree(Frontera frontera, int capacidad);
+        ~QuadTree();
+
+        
+        bool insertar( Particle p);
+        void consultarRango( Frontera rango, vector<Particle>& encontrados, int& comparacionesQuadTree);
+        void limpiar();
 };
 
 
