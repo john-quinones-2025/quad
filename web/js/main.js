@@ -294,6 +294,7 @@ function aplicarModalidad() {
     modoTest = false;
     testData = null;
     document.getElementById('test-info').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
 
     const n = Math.max(1, parseInt(document.getElementById('cfg-n').value, 10) || 1000);
     const grupos = Math.max(1, parseInt(document.getElementById('cfg-clusters').value, 10) || 5);
@@ -346,6 +347,8 @@ function configurarTest(cap) {
     modoTest = true;
     iniciado = false;   // escenario estatico, sin fisica
     pausado = true;
+    // el HUD (FPS, comparaciones, mejora) no aplica al test estatico y solapa la caja ID 1
+    document.getElementById('hud').style.display = 'none';
     encajarMundo();
     mostrarInfoTest();
 }
