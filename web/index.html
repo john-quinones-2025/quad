@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuadTree — Simulador de colisiones</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="lienzo"></canvas>
+
+    <!-- HUD de metricas (#16) -->
+    <div id="hud">
+        <div class="hud-titulo">QuadTree · colisiones</div>
+        <div class="hud-fila"><span>Partículas</span><b id="hud-n">0</b></div>
+        <div class="hud-fila"><span>FPS</span><b id="hud-fps">0</b></div>
+        <div class="hud-fila"><span>Comp. QuadTree</span><b id="hud-qt">0</b></div>
+        <div class="hud-fila"><span>Comp. Fuerza bruta</span><b id="hud-fb">0</b></div>
+        <div class="hud-fila destacado"><span>Mejora</span><b id="hud-razon">-</b></div>
+    </div>
+
+    <!-- Controles (#17) -->
+    <div id="panel">
+        <button id="btn-pausa">Pausar</button>
+        <button id="btn-reset">Reset</button>
+
+        <label>Capacidad nodo: <span id="val-cap">4</span>
+            <input type="range" id="slider-cap" min="1" max="16" value="4">
+        </label>
+
+        <label>N inicial (reset): <span id="val-n">300</span>
+            <input type="range" id="slider-n" min="10" max="3000" step="10" value="300">
+        </label>
+
+        <label class="check">
+            <input type="checkbox" id="toggle-arbol" checked> Mostrar QuadTree
+        </label>
+
+        <hr>
+        <button id="btn-validar">Validar vs C++</button>
+        <div id="validacion-salida"></div>
+
+        <div class="ayuda">
+            Click-drag: añadir partícula (dirección = velocidad)<br>
+            Rueda: zoom · Click derecho + drag: pan
+        </div>
+    </div>
+
+    <script src="js/Particle.js"></script>
+    <script src="js/Frontera.js"></script>
+    <script src="js/QuadTree.js"></script>
+    <script src="js/Simulador.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# Binarios compilados
+quadtree
+*.o
+*.out
+*.exe
+a.out
+
+# Artefactos de build
+build/
+*.dSYM/
+
+# Salidas de benchmark
+*.csv
+
+# Sistema / editor
+.DS_Store
+AUDITORIA.md
+issues.txt
