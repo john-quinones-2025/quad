@@ -76,6 +76,7 @@ class QuadTree {
         
         bool insertar( Particle p);
         void consultarRango( Frontera rango, vector<Particle>& encontrados, int& comparacionesQuadTree);
+        void consultarRadio(double px, double py, double radioBuscado, vector<Particle>& encontrados, int& comparacionesQuadTree);
         void limpiar();
 };
 

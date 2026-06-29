@@ -4,6 +4,8 @@
 #include "QuadTree.h"
 #include <vector>
 #include <cmath>
+#include <random>
+#include <chrono>
 
 using namespace std;
 
@@ -15,6 +17,7 @@ class Simulador {
         double anchoEspacio;
         double altoEspacio;
         int capacidadQuadTree;
+        double radioMaximo;             // acotaremos los radios, para encontrar vecinos con radios diferentes.
 
         
         bool verificanColision(Particle p1, Particle p2);
@@ -22,6 +25,10 @@ class Simulador {
     public:
 
         Simulador(double ancho, double alto, int capacidadQT);
+
+        void generarUniforme(int cantidad, double radioMin, double radioMax, double velMax);
+        void generarClusters(int cantidad, int numClusters, double radioMin, double radioMax, double velMax);
+        void generarAltaDensidad(int cantidad, double radioMin, double radioMax, double velMax);
 
         void agregarParticula(Particle p);
 
@@ -35,6 +42,11 @@ class Simulador {
 
         
         int detectarColisionesQuadTree();
+
+        void reporteColisionesQuadTree(double& tiempoMilisegundos, int& comparacionesTotales, double& candidatosPromedio);
+        void reporteColisionesFuerzaBruta(double& tiempoMilisegundos, int& comparacionesTotales);
+        void ejecutarExperimentos();
+
 };
 
 #endif
