@@ -101,3 +101,117 @@ html, body {
     border-top: 1px solid rgba(255,255,255,0.1);
     padding-top: 8px;
 }
+
+/* ---- Pantalla de inicio ---- */
+#overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(5, 8, 13, 0.85);
+    backdrop-filter: blur(6px);
+    z-index: 10;
+}
+
+#overlay.oculto { display: none; }
+
+.modal {
+    width: 420px;
+    max-width: 92vw;
+    background: rgba(18, 24, 34, 0.97);
+    border: 1px solid rgba(0, 220, 255, 0.3);
+    border-radius: 14px;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.modal h1 {
+    color: #00dcff;
+    font-size: 28px;
+    letter-spacing: 1px;
+}
+
+.modal .sub { color: #9aa7b5; font-size: 13px; margin-top: -8px; }
+
+.campo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: #9aa7b5;
+    font-size: 13px;
+}
+
+.campo input {
+    background: #0e141d;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    color: #fff;
+    padding: 9px 10px;
+    font-size: 15px;
+}
+
+.modos { display: flex; flex-direction: column; gap: 8px; }
+
+.modo {
+    text-align: left;
+    background: #0e141d;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    transition: border-color .15s, background .15s;
+}
+
+.modo:hover { background: #141d29; }
+
+.modo.seleccionado {
+    border-color: #00dcff;
+    background: rgba(0, 220, 255, 0.1);
+}
+
+.modo-nom { color: #fff; font-weight: 600; font-size: 15px; }
+.modo-desc { color: #8a97a5; font-size: 12px; }
+
+#btn-iniciar {
+    background: #00dcff;
+    color: #06121a;
+    border: none;
+    border-radius: 8px;
+    padding: 13px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+#btn-iniciar:hover { background: #4ae8ff; }
+
+/* ---- Panel de resultado del test ---- */
+#test-info {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    width: 320px;
+    max-width: 92vw;
+    background: rgba(15, 20, 30, 0.9);
+    border: 1px solid rgba(0, 220, 255, 0.25);
+    border-radius: 8px;
+    padding: 12px 14px;
+    backdrop-filter: blur(4px);
+    font-size: 12px;
+    line-height: 1.5;
+    color: #cdd6df;
+}
+
+#test-info .ti-tit {
+    font-weight: 700;
+    color: #00dcff;
+    margin-bottom: 8px;
+}
+
+#test-info .ti-fila { margin-top: 8px; }

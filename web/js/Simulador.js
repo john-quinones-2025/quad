@@ -102,6 +102,74 @@ class Simulador {
         }
     }
 
+    // gaussiano N(0,1) por Box-Muller, consumiendo el rng dado
+    _gauss(rnd) {
+        let u = 0, v = 0;
+        while (u === 0) u = rnd();
+        while (v === 0) v = rnd();
+        return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    }
+
+    // espejo de generarClusters (C++): numClusters grupos con dispersion gaussiana
+    generarClusters(cantidad, numClusters, radioMin, radioMax, velMax, semilla = 0) {
+        this.particulas = [];
+        this.radioMaximo = radioMax;
+        const rnd = semilla ? this._rng(semilla) : Math.random;
+
+        const centros = [];
+        for (let i = 0; i < numClusters; i++) {
+            const cx = this.anchoEspacio * 0.1 + rnd() * this.anchoEspacio * 0.8;
+            const cy = this.altoEspacio * 0.1 + rnd() * this.altoEspacio * 0.8;
+            centros.push([cx, cy]);
+        }
+
+        const dispersion = this.anchoEspacio * 0.05;
+
+        for (let i = 0; i < cantidad; i++) {
+            const c = centros[i % numClusters];
+            let px = c[0] + this._gauss(rnd) * dispersion;
+            let py = c[1] + this._gauss(rnd) * dispersion;
+
+            px = Math.max(radioMax, Math.min(px, this.anchoEspacio - radioMax));
+            py = Math.max(radioMax, Math.min(py, this.altoEspacio - radioMax));
+
+            const vx = (rnd() * 2 - 1) * velMax;
+            const vy = (rnd() * 2 - 1) * velMax;
+            const r = radioMin + rnd() * (radioMax - radioMin);
+            this.particulas.push(new Particle(i, px, py, vx, vy, r));
+        }
+    }
+
+    // espejo de generarAltaDensidad (C++): 90% apretadas al centro, 10% sueltas
+    generarAltaDensidad(cantidad, radioMin, radioMax, velMax, semilla = 0) {
+        this.particulas = [];
+        this.radioMaximo = radioMax;
+        const rnd = semilla ? this._rng(semilla) : Math.random;
+
+        const cx = this.anchoEspacio / 2;
+        const cy = this.altoEspacio / 2;
+        const sigma = this.anchoEspacio * 0.1;
+
+        for (let i = 0; i < cantidad; i++) {
+            let px, py;
+            if (i < cantidad * 0.90) {
+                px = cx + this._gauss(rnd) * sigma;
+                py = cy + this._gauss(rnd) * sigma;
+            } else {
+                px = radioMax + rnd() * (this.anchoEspacio - 2 * radioMax);
+                py = radioMax + rnd() * (this.altoEspacio - 2 * radioMax);
+            }
+
+            px = Math.max(radioMax, Math.min(px, this.anchoEspacio - radioMax));
+            py = Math.max(radioMax, Math.min(py, this.altoEspacio - radioMax));
+
+            const vx = (rnd() * 2 - 1) * velMax;
+            const vy = (rnd() * 2 - 1) * velMax;
+            const r = radioMin + rnd() * (radioMax - radioMin);
+            this.particulas.push(new Particle(i, px, py, vx, vy, r));
+        }
+    }
+
     agregarParticula(x, y, vx, vy, radius) {
         const id = this.particulas.length;
         this.particulas.push(new Particle(id, x, y, vx, vy, radius));

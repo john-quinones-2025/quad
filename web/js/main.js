@@ -8,11 +8,13 @@ const canvas = document.getElementById('lienzo');
 const ctx = canvas.getContext('2d');
 
 let sim = new Simulador(MUNDO, MUNDO, 4);
-sim.generarUniforme(300, 2, 6, 2);
 
 // estado de UI
 let pausado = false;
 let mostrarArbol = true;
+let iniciado = false;       // no simulamos hasta que se elija una modalidad
+let modoTest = false;       // modo validacion de consultas espaciales (estatico)
+let testData = null;        // { caja, circulo, rectIds, circIds, encontrados }
 
 // camara: world = (screen - offset) / zoom
 const camara = { x: 0, y: 0, zoom: 1 };
@@ -30,12 +32,13 @@ function ajustarCanvas() {
     encajarMundo();
 }
 
-// centra y escala el mundo para que quepa en el canvas
+// centra y escala el mundo (del tamaño del sim actual) para que quepa en el canvas
 function encajarMundo() {
-    const escala = Math.min(canvas.width, canvas.height) / MUNDO * 0.9;
+    const lado = Math.max(sim.anchoEspacio, sim.altoEspacio);
+    const escala = Math.min(canvas.width, canvas.height) / lado * 0.9;
     camara.zoom = escala;
-    camara.x = (canvas.width - MUNDO * escala) / 2;
-    camara.y = (canvas.height - MUNDO * escala) / 2;
+    camara.x = (canvas.width - sim.anchoEspacio * escala) / 2;
+    camara.y = (canvas.height - sim.altoEspacio * escala) / 2;
 }
 
 window.addEventListener('resize', ajustarCanvas);
@@ -60,19 +63,29 @@ function render() {
     // borde del mundo
     ctx.strokeStyle = 'rgba(255,255,255,0.2)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, MUNDO, MUNDO);
+    ctx.strokeRect(0, 0, sim.anchoEspacio, sim.altoEspacio);
 
     if (mostrarArbol) {
         sim.reconstruirArbol();
         sim.arbol.dibujar(ctx, sim.capacidadQuadTree);
     }
 
-    // particulas
-    ctx.fillStyle = '#ffd166';
+    // en modo test dibujamos las regiones de consulta debajo de las particulas
+    if (modoTest && testData) renderTest();
+
+    // particulas (resaltadas si fueron encontradas por alguna consulta del test)
     for (const p of sim.particulas) {
+        ctx.fillStyle = (modoTest && testData && testData.encontrados.has(p.id)) ? '#06d6a0' : '#ffd166';
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
         ctx.fill();
+
+        // etiqueta de ID en modo test
+        if (modoTest) {
+            ctx.fillStyle = '#fff';
+            ctx.font = `${6}px sans-serif`;
+            ctx.fillText('ID ' + p.id, p.x + p.radius + 2, p.y - p.radius - 2);
+        }
     }
 
     // previsualizacion del arrastre (velocidad inicial)
@@ -88,6 +101,30 @@ function render() {
     }
 
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+// dibuja las regiones de consulta del modo test
+function renderTest() {
+    const c = testData.caja;
+    ctx.setLineDash([4 / camara.zoom, 3 / camara.zoom]);
+    ctx.lineWidth = 1 / camara.zoom;
+
+    // caja rectangular (consultarRango)
+    ctx.fillStyle = 'rgba(77, 171, 247, 0.12)';
+    ctx.fillRect(c.x - c.ancho, c.y - c.alto, c.ancho * 2, c.alto * 2);
+    ctx.strokeStyle = '#4dabf7';
+    ctx.strokeRect(c.x - c.ancho, c.y - c.alto, c.ancho * 2, c.alto * 2);
+
+    // circulo (consultarRadio)
+    const o = testData.circulo;
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 169, 77, 0.12)';
+    ctx.fill();
+    ctx.strokeStyle = '#ffa94d';
+    ctx.stroke();
+
+    ctx.setLineDash([]);
 }
 
 // ---------------------------------------------------------------------------
@@ -114,7 +151,7 @@ function frame(t) {
     ultimoT = t;
     fps = 1000 / dt;
 
-    if (!pausado) {
+    if (iniciado && !pausado) {
         sim.simularPaso();
     }
     render();
@@ -166,7 +203,7 @@ canvas.addEventListener('mouseup', (e) => {
             vy = (Math.random() * 2 - 1) * 2;
         }
         const r = 3 + Math.random() * 4;
-        if (m0.x > 0 && m0.x < MUNDO && m0.y > 0 && m0.y < MUNDO) {
+        if (!modoTest && m0.x > 0 && m0.x < sim.anchoEspacio && m0.y > 0 && m0.y < sim.altoEspacio) {
             sim.agregarParticula(m0.x, m0.y, vx, vy, r);
         }
     }
@@ -194,12 +231,6 @@ btnPausa.addEventListener('click', () => {
     btnPausa.textContent = pausado ? 'Reanudar' : 'Pausar';
 });
 
-document.getElementById('btn-reset').addEventListener('click', () => {
-    const n = parseInt(document.getElementById('slider-n').value, 10);
-    sim.reset();
-    sim.generarUniforme(n, 2, 6, 0);
-});
-
 const sliderCap = document.getElementById('slider-cap');
 sliderCap.addEventListener('input', () => {
     const cap = parseInt(sliderCap.value, 10);
@@ -207,13 +238,114 @@ sliderCap.addEventListener('input', () => {
     sim.setCapacidad(cap);
 });
 
-const sliderN = document.getElementById('slider-n');
-sliderN.addEventListener('input', () => {
-    document.getElementById('val-n').textContent = sliderN.value;
-});
-
 document.getElementById('toggle-arbol').addEventListener('change', (e) => {
     mostrarArbol = e.target.checked;
+});
+
+// ---------------------------------------------------------------------------
+// Pantalla de inicio con modalidades
+// ---------------------------------------------------------------------------
+const overlay = document.getElementById('overlay');
+const clustersWrap = document.getElementById('cfg-clusters-wrap');
+let modoSeleccionado = 'uniforme';
+
+document.querySelectorAll('.modo').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.modo').forEach(b => b.classList.remove('seleccionado'));
+        btn.classList.add('seleccionado');
+        modoSeleccionado = btn.dataset.modo;
+        clustersWrap.style.display = (modoSeleccionado === 'clusters') ? 'flex' : 'none';
+        // el test usa un escenario fijo de 4 partículas; N no aplica
+        document.getElementById('cfg-n-wrap').style.display = (modoSeleccionado === 'test') ? 'none' : 'flex';
+    });
+});
+
+function aplicarModalidad() {
+    const cap = parseInt(sliderCap.value, 10) || 4;
+
+    if (modoSeleccionado === 'test') {
+        configurarTest(cap);
+        overlay.classList.add('oculto');
+        return;
+    }
+
+    // modos dinamicos: mundo 800x800
+    modoTest = false;
+    testData = null;
+    document.getElementById('test-info').style.display = 'none';
+
+    const n = Math.max(1, parseInt(document.getElementById('cfg-n').value, 10) || 1000);
+    const grupos = Math.max(1, parseInt(document.getElementById('cfg-clusters').value, 10) || 5);
+
+    sim = new Simulador(MUNDO, MUNDO, cap);
+    // radios 2-6, velocidad maxima 2 (igual que el resto del proyecto)
+    if (modoSeleccionado === 'clusters') {
+        sim.generarClusters(n, grupos, 2, 6, 2);
+    } else if (modoSeleccionado === 'densidad') {
+        sim.generarAltaDensidad(n, 2, 6, 2);
+    } else {
+        sim.generarUniforme(n, 2, 6, 2);
+    }
+
+    iniciado = true;
+    pausado = false;
+    btnPausa.textContent = 'Pausar';
+    encajarMundo();
+    overlay.classList.add('oculto');
+}
+
+// Monta el escenario de validacion de consultas: 4 esquinas de un mapa 200x200,
+// query rectangular en la esquina superior izquierda y circular en la inferior derecha.
+function configurarTest(cap) {
+    sim = new Simulador(200, 200, cap);
+    sim.particulas = [
+        new Particle(1,  10,  10, 0, 0, 4),  // superior izquierda
+        new Particle(2, 190,  10, 0, 0, 4),  // superior derecha
+        new Particle(3,  10, 190, 0, 0, 4),  // inferior izquierda
+        new Particle(4, 190, 190, 0, 0, 4),  // inferior derecha
+    ];
+    sim.radioMaximo = 4;
+    sim.reconstruirArbol();
+
+    const caja = new Frontera(10, 10, 20, 20);          // esquina superior izquierda
+    const rect = [];
+    sim.arbol.consultarRango(caja, rect, { n: 0 });
+
+    const circulo = { x: 190, y: 190, r: 30 };           // esquina inferior derecha
+    const circ = [];
+    sim.arbol.consultarRadio(circulo.x, circulo.y, circulo.r, circ, { n: 0 });
+
+    const rectIds = rect.map(p => p.id);
+    const circIds = circ.map(p => p.id);
+    testData = {
+        caja, circulo, rectIds, circIds,
+        encontrados: new Set([...rectIds, ...circIds])
+    };
+
+    modoTest = true;
+    iniciado = false;   // escenario estatico, sin fisica
+    pausado = true;
+    encajarMundo();
+    mostrarInfoTest();
+}
+
+function mostrarInfoTest() {
+    const okR = testData.rectIds.length === 1 && testData.rectIds[0] === 1;
+    const okC = testData.circIds.length === 1 && testData.circIds[0] === 4;
+    const el = document.getElementById('test-info');
+    el.innerHTML =
+        '<div class="ti-tit">Validación de consultas espaciales</div>' +
+        '<div class="ti-fila"><b style="color:#4dabf7">1. Rango rectangular</b> — esquina superior izquierda<br>' +
+        'Esperado: ID 1 · Encontrado: ' + (testData.rectIds.join(', ') || '—') + ' ' + (okR ? '✅' : '❌') + '</div>' +
+        '<div class="ti-fila"><b style="color:#ffa94d">2. Radio circular</b> — esquina inferior derecha<br>' +
+        'Esperado: ID 4 · Encontrado: ' + (testData.circIds.join(', ') || '—') + ' ' + (okC ? '✅' : '❌') + '</div>';
+    el.style.display = 'block';
+}
+
+document.getElementById('btn-iniciar').addEventListener('click', aplicarModalidad);
+
+document.getElementById('btn-nuevo').addEventListener('click', () => {
+    overlay.classList.remove('oculto');
 });
 
 // ---------------------------------------------------------------------------
