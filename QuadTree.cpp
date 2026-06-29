@@ -165,3 +165,41 @@ void QuadTree::limpiar() {
         dividido = false;
     }
 }
+
+
+void QuadTree::consultarRadio(double px, double py, double radioBuscado, vector<Particle>& encontrados, int& comparacionesQuadTree) {
+    // creamos una caja que cubra el circulo buscado
+    Frontera rango = {px, py, radioBuscado, radioBuscado};
+
+    // si la caja no intersecta con este cuadrante, lo descartamos
+    if (!limite.intersecta(rango)) {
+
+        return;
+    }
+
+    if (!dividido) {
+
+        for (auto p : particulas) {
+
+            comparacionesQuadTree++;
+            
+            // verificamos si la particula esta dentro del circulo
+            double dx = p.x - px;
+            double dy = p.y - py;
+            double distanciaCuadrada = (dx * dx) + (dy * dy);
+            
+            if (distanciaCuadrada <= (radioBuscado * radioBuscado)) {
+
+                encontrados.push_back(p);
+                
+            }
+        }
+    } 
+    else {
+
+        noroeste->consultarRadio(px, py, radioBuscado, encontrados, comparacionesQuadTree);
+        noreste->consultarRadio(px, py, radioBuscado, encontrados, comparacionesQuadTree);
+        suroeste->consultarRadio(px, py, radioBuscado, encontrados, comparacionesQuadTree);
+        sureste->consultarRadio(px, py, radioBuscado, encontrados, comparacionesQuadTree);
+    }
+}
