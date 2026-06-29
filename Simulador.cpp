@@ -1,18 +1,32 @@
 #include "Simulador.h"
+#include <iostream>
+#include <fstream>
+#include <algorithm>
 
 
-// constuimos el espacio del simulado, y la capcidad del quadtree 
-Simulador::Simulador(double ancho, double alto, int capacidadQT) {
+// constuimos el espacio del simulado, y la capcidad del quadtree.
+// el arbol miembro se construye una sola vez con el limite global y se reutiliza cada frame.
+Simulador::Simulador(double ancho, double alto, int capacidadQT)
+    : anchoEspacio(ancho),
+      altoEspacio(alto),
+      radioMaximo(0.0),
+      arbol(Frontera{ancho / 2, alto / 2, ancho / 2, alto / 2}, capacidadQT),
+      sumidero(false) {
+}
 
-    anchoEspacio = ancho;
-    altoEspacio = alto;
-    capacidadQuadTree = capacidadQT;
-    radioMaximo = 0.0;
+
+// generador mt19937: semilla==0 -> no determinista; semilla fija -> reproducible (para validacion)
+mt19937 Simulador::crearGenerador(unsigned int semilla) const {
+    if (semilla == 0) {
+        random_device rd;
+        return mt19937(rd());
+    }
+    return mt19937(semilla);
 }
 
 
 // agregamos particulas al simulador
-void Simulador::agregarParticula(Particle p) {
+void Simulador::agregarParticula(const Particle& p) {
     particulas.push_back(p);
 }
 
@@ -24,27 +38,82 @@ vector<Particle>& Simulador::obtenerParticulas() {
 
 
 // para verificar si choco o no entre dos particulas de diferentes radios.
-bool Simulador::verificanColision(Particle p1, Particle p2) {
+bool Simulador::verificanColision(const Particle& p1, const Particle& p2) const {
     // Para no comparar una particula consigo misma
     if (p1.id == p2.id) return false;
 
     double dx = p1.x - p2.x;
     double dy = p1.y - p2.y;
     double distanciaCuadrada = (dx * dx) + (dy * dy);
-    
+
     double sumaRadios = p1.radius + p2.radius;
-    
+
     return distanciaCuadrada <= (sumaRadios * sumaRadios);
 }
 
-// generador de particula uniformemente
-void Simulador::generarUniforme(int cantidad, double radioMin, double radioMax, double velMax) {
+
+// respuesta fisica: colision elastica entre dos circulos con masa proporcional al area (r^2).
+void Simulador::resolverColision(Particle& a, Particle& b) {
+
+    double dx = b.x - a.x;
+    double dy = b.y - a.y;
+    double distanciaCuadrada = (dx * dx) + (dy * dy);
+    double sumaRadios = a.radius + b.radius;
+
+    // no se tocan, o estan exactamente encima (evitamos division por cero)
+    if (distanciaCuadrada > sumaRadios * sumaRadios) return;
+    if (distanciaCuadrada == 0.0) return;
+
+    double distancia = sqrt(distanciaCuadrada);
+
+    // normal del contacto (de a hacia b)
+    double nx = dx / distancia;
+    double ny = dy / distancia;
+
+    // velocidad relativa proyectada sobre la normal
+    double dvx = a.vx - b.vx;
+    double dvy = a.vy - b.vy;
+    double velNormal = dvx * nx + dvy * ny;
+
+    // si ya se estan separando no aplicamos impulso
+    if (velNormal <= 0) return;
+
+    double masaA = a.radius * a.radius;
+    double masaB = b.radius * b.radius;
+
+    // impulso elastico 1D sobre la normal, repartido por masa
+    double impulso = (2.0 * velNormal) / (masaA + masaB);
+
+    a.vx -= impulso * masaB * nx;
+    a.vy -= impulso * masaB * ny;
+    b.vx += impulso * masaA * nx;
+    b.vy += impulso * masaA * ny;
+
+    // separamos el solapamiento para que no queden pegadas
+    double solapamiento = 0.5 * (sumaRadios - distancia);
+    a.x -= solapamiento * nx;
+    a.y -= solapamiento * ny;
+    b.x += solapamiento * nx;
+    b.y += solapamiento * ny;
+}
+
+
+// limpia el arbol miembro y reinserta todas las particulas del frame actual (#7)
+void Simulador::reconstruirArbol() {
+    arbol.limpiar();
+    for (const auto& p : particulas) {
+        arbol.insertar(p);
+    }
+}
+
+
+// generador uniforme
+void Simulador::generarUniforme(int cantidad, double radioMin, double radioMax, double velMax, unsigned int semilla) {
 
     particulas.clear();
     radioMaximo = radioMax; // guardamos el radio maximo
 
-    random_device rd;
-    mt19937 gen(rd());
+    mt19937 gen = crearGenerador(semilla);
 
     uniform_real_distribution<> disX(radioMax, anchoEspacio - radioMax);
     uniform_real_distribution<> disY(radioMax, altoEspacio - radioMax);
@@ -60,13 +129,12 @@ void Simulador::generarUniforme(int cantidad, double radioMin, double radioMax, 
 
 
 
-void Simulador::generarClusters(int cantidad, int numClusters, double radioMin, double radioMax, double velMax) {
+void Simulador::generarClusters(int cantidad, int numClusters, double radioMin, double radioMax, double velMax, unsigned int semilla) {
 
     particulas.clear();
     radioMaximo = radioMax;
 
-    random_device rd;
-    mt19937 gen(rd());
+    mt19937 gen = crearGenerador(semilla);
 
     uniform_real_distribution<> disCentroX(anchoEspacio * 0.1, anchoEspacio * 0.9);
     uniform_real_distribution<> disCentroY(altoEspacio * 0.1, altoEspacio * 0.9);
@@ -102,23 +170,22 @@ void Simulador::generarClusters(int cantidad, int numClusters, double radioMin, 
 }
 
 
-void Simulador::generarAltaDensidad(int cantidad, double radioMin, double radioMax, double velMax) {
+void Simulador::generarAltaDensidad(int cantidad, double radioMin, double radioMax, double velMax, unsigned int semilla) {
 
 
     particulas.clear();
     radioMaximo = radioMax;
 
-    random_device rd;
-    mt19937 gen(rd());
-    
+    mt19937 gen = crearGenerador(semilla);
+
     // pondremos el 90 porciento de particulas concentradas en el centro
     normal_distribution<> disCentroX(anchoEspacio / 2, anchoEspacio * 0.1);
     normal_distribution<> disCentroY(altoEspacio / 2, altoEspacio * 0.1);
-    
+
     // pondremos el 10 porciento partiulas esparcidas
     uniform_real_distribution<> disBajaX(radioMax, anchoEspacio - radioMax);
     uniform_real_distribution<> disBajaY(radioMax, altoEspacio - radioMax);
-    
+
     uniform_real_distribution<> disR(radioMin, radioMax);
     uniform_real_distribution<> disV(-velMax, velMax);
 
@@ -127,12 +194,12 @@ void Simulador::generarAltaDensidad(int cantidad, double radioMin, double radioM
         double px, py;
 
         // 90% apretadas
-        if (i < cantidad * 0.90) { 
+        if (i < cantidad * 0.90) {
 
             px = disCentroX(gen);
             py = disCentroY(gen);
 
-        } else { 
+        } else {
 
             // 10% sueltas
             px = disBajaX(gen);
@@ -153,7 +220,7 @@ void Simulador::generarAltaDensidad(int cantidad, double radioMin, double radioM
 void Simulador::actualizarFisica() {
 
 
-    for (int i = 0; i < particulas.size(); i++) {
+    for (size_t i = 0; i < particulas.size(); i++) {
 
         // movemos al particula
         particulas[i].x += particulas[i].vx;
@@ -185,101 +252,75 @@ void Simulador::actualizarFisica() {
 }
 
 
-// fuerza bruta, verificamos todos los choques entre pares de particulas.
-int Simulador::detectarColisionesFuerzaBruta() {
+// un paso completo de simulacion usando el quadtree: fisica + deteccion + respuesta (#3, #4)
+void Simulador::simularPaso() {
 
-    int comparaciones = 0;
-    
-    for (int i = 0; i < particulas.size(); i++) {
+    actualizarFisica();
 
-        for (int j = i + 1; j < particulas.size(); j++) {
+    reconstruirArbol();
 
-            comparaciones++; //contador
-            verificanColision(particulas[i], particulas[j]);
-        }
-    }
+    int comparaciones = 0; // descartado aqui; el conteo formal lo hacen los reportes
 
+    for (size_t i = 0; i < particulas.size(); i++) {
 
-    return comparaciones;
-}
-
-// usamos quadtrees para la deteccion de choques
-int Simulador::detectarColisionesQuadTree() {
-
-    int comparaciones = 0;
-    
-    // definimos el limiteGlobal del quadtree
-    Frontera limiteGlobal = {anchoEspacio / 2, altoEspacio / 2, anchoEspacio / 2, altoEspacio / 2};
-    QuadTree qt(limiteGlobal, capacidadQuadTree);
-
-    // insertamos todas las particulas en ese frame
-    for (int i = 0; i < particulas.size(); i++) {
-        qt.insertar(particulas[i]);
-    }
-
-    // consultamos los choques por cada particula
-    for (int i = 0; i < particulas.size(); i++) {
-
-        // creamos una frontera de busqueda para atrapar a los posibles candidatos a que hayan chocado
-        // utilizamos una caja con el radio del doble por mientras, luego arreglamos para cuando
-        // una particula chica se detecte el choque con una grande.
-        double rangoBusqueda = particulas[i].radius+ radioMaximo;
-        Frontera areaConsulta = {particulas[i].x, particulas[i].y, rangoBusqueda , rangoBusqueda};
+        double rangoBusqueda = particulas[i].radius + radioMaximo;
 
         vector<Particle> vecinosCandidatos;
-        
-        // el quadtree nos llena el vector y nos suma las comparaciones 
-        qt.consultarRango(areaConsulta, vecinosCandidatos, comparaciones);
+        arbol.consultarRadio(particulas[i].x, particulas[i].y, rangoBusqueda, vecinosCandidatos, comparaciones);
 
+        for (const auto& c : vecinosCandidatos) {
 
-        // verificamos choque entres estos pocos candidatos
-        for (int j = 0; j < vecinosCandidatos.size(); j++) {
-            
-            verificanColision(particulas[i], vecinosCandidatos[j]);
+            // resolvemos cada par una sola vez (id == indice en el vector)
+            if (c.id > (int)i) {
+                resolverColision(particulas[i], particulas[c.id]);
+            }
         }
     }
-
-    return comparaciones;
 }
 
 
+// paso determinista por fuerza bruta (orden i<j), usado para la validacion cruzada con JS (#18)
+void Simulador::simularPasoFB() {
 
+    actualizarFisica();
+
+    for (size_t i = 0; i < particulas.size(); i++) {
+        for (size_t j = i + 1; j < particulas.size(); j++) {
+            resolverColision(particulas[i], particulas[j]);
+        }
+    }
+}
+
+
+// usamos el quadtree para la deteccion de choques. benchmark puro: cuenta y mide tiempo.
 void Simulador::reporteColisionesQuadTree(double& tiempoMilisegundos, int& comparacionesTotales, double& candidatosPromedio) {
 
     comparacionesTotales = 0;
     int totalCandidatosRevisados = 0; // para el promedio que pide el profe
-    
+
     auto inicio = chrono::high_resolution_clock::now();
 
-    Frontera limiteGlobal = {anchoEspacio / 2, altoEspacio / 2, anchoEspacio / 2, altoEspacio / 2};
-    QuadTree qt(limiteGlobal, capacidadQuadTree);
+    // construir el arbol forma parte del costo del metodo quadtree
+    reconstruirArbol();
 
-
-    for (int i = 0; i < particulas.size(); i++) {
-
-        qt.insertar(particulas[i]);
-    }
-
-    for (int i = 0; i < particulas.size(); i++) {
+    for (size_t i = 0; i < particulas.size(); i++) {
 
         double rangoBusqueda = particulas[i].radius + radioMaximo;
-        Frontera areaConsulta = {particulas[i].x, particulas[i].y, rangoBusqueda, rangoBusqueda};
 
         vector<Particle> vecinosCandidatos;
-        qt.consultarRango(areaConsulta, vecinosCandidatos, comparacionesTotales);
-        
-        totalCandidatosRevisados += vecinosCandidatos.size();
+        arbol.consultarRadio(particulas[i].x, particulas[i].y, rangoBusqueda, vecinosCandidatos, comparacionesTotales);
 
-        for (int j = 0; j < vecinosCandidatos.size(); j++) {
+        totalCandidatosRevisados += (int)vecinosCandidatos.size();
 
-            verificanColision(particulas[i], vecinosCandidatos[j]);
+        for (const auto& c : vecinosCandidatos) {
+            sumidero ^= verificanColision(particulas[i], c);
         }
     }
 
     auto fin = chrono::high_resolution_clock::now();
     chrono::duration<double, milli> duracion = fin - inicio;
     tiempoMilisegundos = duracion.count();
-    
+
     // calculo del promedio de candidatos por objeto
     if (particulas.size() > 0) {
         candidatosPromedio = (double)totalCandidatosRevisados / particulas.size();
@@ -288,19 +329,19 @@ void Simulador::reporteColisionesQuadTree(double& tiempoMilisegundos, int& compa
     }
 }
 
-// reporte fuerza bruta
+// reporte fuerza bruta. benchmark puro: cuenta y mide tiempo.
 void Simulador::reporteColisionesFuerzaBruta(double& tiempoMilisegundos, int& comparacionesTotales) {
 
     comparacionesTotales = 0;
-    
+
     auto inicio = chrono::high_resolution_clock::now();
 
-    for (int i = 0; i < particulas.size(); i++) {
+    for (size_t i = 0; i < particulas.size(); i++) {
 
-        for (int j = i + 1; j < particulas.size(); j++) {
+        for (size_t j = i + 1; j < particulas.size(); j++) {
 
-            comparacionesTotales++; 
-            verificanColision(particulas[i], particulas[j]);
+            comparacionesTotales++;
+            sumidero ^= verificanColision(particulas[i], particulas[j]);
         }
     }
 
@@ -313,60 +354,120 @@ void Simulador::reporteColisionesFuerzaBruta(double& tiempoMilisegundos, int& co
 
 
 void Simulador::ejecutarExperimentos() {
-    vector<int> tamanos = {1000, 5000, 10000}; 
-    
+    vector<int> tamanos = {1000, 5000, 10000};
+
+    // CSV para graficar (#5)
+    ofstream csv("benchmark.csv");
+    csv << "N,distribucion,comp_FB,comp_QT,tiempo_FB_ms,tiempo_QT_ms,cand_promedio,razon_comp\n";
+
     cout << "EXPERIMENTOS:\n";
- 
+
 
     for (int n : tamanos) {
         cout << "............EVALUANDO " << n << " OBJETOS ..........\n";
-        
+
         double tiempoFB, tiempoQT, candPromedio;
         int compFB, compQT;
 
-        // uniforme
+        // helper local para reportar a consola y CSV
+        auto reportar = [&](const string& nombre) {
+            reporteColisionesFuerzaBruta(tiempoFB, compFB);
+            reporteColisionesQuadTree(tiempoQT, compQT, candPromedio);
+
+            double razon = (compQT > 0) ? (double)compFB / compQT : 0.0;
+
+            cout << nombre << ":\n";
+            cout << "  - Fuerza Bruta : " << tiempoFB << " ms | Comparaciones: " << compFB << "\n";
+            cout << "  - QuadTree     : " << tiempoQT << " ms | Comparaciones: " << compQT << "\n";
+            cout << "  - Promedio de candidatos revisados por objeto: " << candPromedio << "\n";
+            cout << "  - Razon FB/QT (comparaciones): " << razon << "\n\n";
+
+            csv << n << "," << nombre << "," << compFB << "," << compQT << ","
+                << tiempoFB << "," << tiempoQT << "," << candPromedio << "," << razon << "\n";
+        };
+
         generarUniforme(n, 2.0, 5.0, 1.0);
-        reporteColisionesFuerzaBruta(tiempoFB, compFB);
-        reporteColisionesQuadTree(tiempoQT, compQT, candPromedio);
+        reportar("Uniforme");
 
-        cout << "Distribucion Uniforme:\n";
-        cout << "  - Fuerza Bruta : " << tiempoFB << " ms | Comparaciones: " << compFB << "\n";
-        cout << "  - QuadTree     : " << tiempoQT << " ms | Comparaciones: " << compQT << "\n";
-        cout << "  - Promedio de candidatos revisados por objeto: " << candPromedio << "\n\n";
-        
-
-        // clusters
         int numeroDeClusters = 5; // grupos de 5
         generarClusters(n, numeroDeClusters, 2.0, 5.0, 1.0);
-        reporteColisionesFuerzaBruta(tiempoFB, compFB);
-        reporteColisionesQuadTree(tiempoQT, compQT, candPromedio);
+        reportar("Clusters_5");
 
-        cout << "Distribucion Clusters " << numeroDeClusters << " grupos:\n";
-        cout << "  - Fuerza Bruta : " << tiempoFB << " ms | Comparaciones: " << compFB << "\n";
-        cout << "  - QuadTree     : " << tiempoQT << " ms | Comparaciones: " << compQT << "\n";
-        cout << "  - Promedio de candidatos revisados por objeto: " << candPromedio << "\n\n";
-
-
-        // alta densidad
         generarAltaDensidad(n, 2.0, 5.0, 1.0);
-        reporteColisionesFuerzaBruta(tiempoFB, compFB);
-        reporteColisionesQuadTree(tiempoQT, compQT, candPromedio);
-
-        cout << "Distribucion Alta Densidad:\n";
-        cout << "  - Fuerza Bruta : " << tiempoFB << " ms | Comparaciones: " << compFB << "\n";
-        cout << "  - QuadTree     : " << tiempoQT << " ms | Comparaciones: " << compQT << "\n";
-        cout << "  - Promedio de candidatos revisados por objeto: " << candPromedio << "\n\n";
-
-
-
+        reportar("AltaDensidad");
     }
 
-
-
-
+    csv.close();
+    cout << "CSV escrito en benchmark.csv\n\n";
 }
 
 
+// corre M frames imprimiendo comparaciones FB vs QT por frame, ejercitando la fisica (#4)
+void Simulador::ejecutarSimulacion(int n, int frames) {
+
+    generarUniforme(n, 2.0, 5.0, 2.0);
+
+    cout << "SIMULACION DINAMICA (" << n << " objetos, " << frames << " frames):\n";
+    cout << "frame,comp_FB,comp_QT,razon\n";
+
+    for (int f = 0; f < frames; f++) {
+
+        double tiempoFB, tiempoQT, candPromedio;
+        int compFB, compQT;
+
+        reporteColisionesFuerzaBruta(tiempoFB, compFB);
+        reporteColisionesQuadTree(tiempoQT, compQT, candPromedio);
+
+        double razon = (compQT > 0) ? (double)compFB / compQT : 0.0;
+        cout << f << "," << compFB << "," << compQT << "," << razon << "\n";
+
+        // avanzamos un paso con respuesta fisica de choques
+        simularPaso();
+    }
+    cout << "\n";
+}
 
 
+// vuelca a JSON el estado inicial y el final tras `frames` pasos deterministas (#18)
+void Simulador::volcarEscenarioJSON(const string& archivo, int n, int frames, unsigned int semilla) {
 
+    generarUniforme(n, 2.0, 5.0, 2.0, semilla);
+
+    ofstream out(archivo);
+
+    auto volcarParticulas = [&](const vector<Particle>& ps) {
+        out << "[";
+        for (size_t i = 0; i < ps.size(); i++) {
+            const Particle& p = ps[i];
+            out << "{\"id\":" << p.id
+                << ",\"x\":" << p.x << ",\"y\":" << p.y
+                << ",\"vx\":" << p.vx << ",\"vy\":" << p.vy
+                << ",\"radius\":" << p.radius << "}";
+            if (i + 1 < ps.size()) out << ",";
+        }
+        out << "]";
+    };
+
+    out.precision(17);
+    out << "{\n";
+    out << "  \"ancho\": " << anchoEspacio << ",\n";
+    out << "  \"alto\": " << altoEspacio << ",\n";
+    out << "  \"frames\": " << frames << ",\n";
+    out << "  \"semilla\": " << semilla << ",\n";
+
+    out << "  \"inicial\": ";
+    volcarParticulas(particulas);
+    out << ",\n";
+
+    // avanzamos de forma determinista (fuerza bruta, orden i<j) para que JS reproduzca exacto
+    for (int f = 0; f < frames; f++) {
+        simularPasoFB();
+    }
+
+    out << "  \"esperado\": ";
+    volcarParticulas(particulas);
+    out << "\n}\n";
+
+    out.close();
+    cout << "Escenario de validacion escrito en " << archivo << "\n";
+}
