@@ -67,7 +67,8 @@ function render() {
 
     if (mostrarArbol) {
         sim.reconstruirArbol();
-        sim.arbol.dibujar(ctx, sim.capacidadQuadTree);
+        // en modo test mostramos solo las lineas del arbol para no tapar las regiones de consulta
+        sim.arbol.dibujar(ctx, sim.capacidadQuadTree, modoTest);
     }
 
     // en modo test dibujamos las regiones de consulta debajo de las particulas
@@ -105,12 +106,15 @@ function render() {
 
 // dibuja las regiones de consulta del modo test
 function renderTest() {
-    const c = testData.caja;
-    ctx.setLineDash([4 / camara.zoom, 3 / camara.zoom]);
-    ctx.lineWidth = 1 / camara.zoom;
+    const z = camara.zoom;
+    const fs = 11 / z;
+    ctx.font = `${fs}px sans-serif`;
+    ctx.lineWidth = 2.5 / z;
+    ctx.setLineDash([6 / z, 4 / z]);
 
     // caja rectangular (consultarRango)
-    ctx.fillStyle = 'rgba(77, 171, 247, 0.12)';
+    const c = testData.caja;
+    ctx.fillStyle = 'rgba(77, 171, 247, 0.30)';
     ctx.fillRect(c.x - c.ancho, c.y - c.alto, c.ancho * 2, c.alto * 2);
     ctx.strokeStyle = '#4dabf7';
     ctx.strokeRect(c.x - c.ancho, c.y - c.alto, c.ancho * 2, c.alto * 2);
@@ -119,12 +123,29 @@ function renderTest() {
     const o = testData.circulo;
     ctx.beginPath();
     ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255, 169, 77, 0.12)';
+    ctx.fillStyle = 'rgba(255, 169, 77, 0.30)';
     ctx.fill();
     ctx.strokeStyle = '#ffa94d';
     ctx.stroke();
 
     ctx.setLineDash([]);
+
+    // etiquetas de cada consulta
+    ctx.fillStyle = '#4dabf7';
+    ctx.fillText('consultarRango', c.x - c.ancho, c.y + c.alto + fs * 1.3);
+    ctx.fillStyle = '#ffa94d';
+    ctx.fillText('consultarRadio', o.x - o.r, o.y - o.r - fs * 0.5);
+
+    // anillo blanco en las particulas encontradas
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2 / z;
+    for (const p of sim.particulas) {
+        if (testData.encontrados.has(p.id)) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius + 4 / z + 2, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -299,12 +320,12 @@ function aplicarModalidad() {
 function configurarTest(cap) {
     sim = new Simulador(200, 200, cap);
     sim.particulas = [
-        new Particle(1,  10,  10, 0, 0, 4),  // superior izquierda
-        new Particle(2, 190,  10, 0, 0, 4),  // superior derecha
-        new Particle(3,  10, 190, 0, 0, 4),  // inferior izquierda
-        new Particle(4, 190, 190, 0, 0, 4),  // inferior derecha
+        new Particle(1,  10,  10, 0, 0, 7),  // superior izquierda
+        new Particle(2, 190,  10, 0, 0, 7),  // superior derecha
+        new Particle(3,  10, 190, 0, 0, 7),  // inferior izquierda
+        new Particle(4, 190, 190, 0, 0, 7),  // inferior derecha
     ];
-    sim.radioMaximo = 4;
+    sim.radioMaximo = 7;
     sim.reconstruirArbol();
 
     const caja = new Frontera(10, 10, 20, 20);          // esquina superior izquierda
