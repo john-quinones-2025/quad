@@ -9,6 +9,43 @@
 <body>
     <canvas id="lienzo"></canvas>
 
+    <!-- Pantalla de inicio con modalidades -->
+    <div id="overlay">
+        <div class="modal">
+            <h1>QuadTree</h1>
+            <p class="sub">Simulador de colisiones — elige una modalidad de inicio</p>
+
+            <label class="campo" id="cfg-n-wrap">Número de partículas (N)
+                <input type="number" id="cfg-n" value="1000" min="1" max="20000" step="10">
+            </label>
+
+            <div class="modos">
+                <button class="modo seleccionado" data-modo="uniforme">
+                    <span class="modo-nom">Uniforme</span>
+                    <span class="modo-desc">Repartidas al azar por todo el espacio</span>
+                </button>
+                <button class="modo" data-modo="clusters">
+                    <span class="modo-nom">Clusters</span>
+                    <span class="modo-desc">Agrupadas en N grupos gaussianos</span>
+                </button>
+                <button class="modo" data-modo="densidad">
+                    <span class="modo-nom">Alta densidad</span>
+                    <span class="modo-desc">90% apretadas al centro, 10% sueltas</span>
+                </button>
+                <button class="modo" data-modo="test">
+                    <span class="modo-nom">Test de consultas espaciales</span>
+                    <span class="modo-desc">Valida rango rectangular y radio circular (4 esquinas)</span>
+                </button>
+            </div>
+
+            <label class="campo" id="cfg-clusters-wrap" style="display:none">Cantidad de grupos
+                <input type="number" id="cfg-clusters" value="5" min="1" max="50">
+            </label>
+
+            <button id="btn-iniciar">Iniciar simulación</button>
+        </div>
+    </div>
+
     <!-- HUD de metricas (#16) -->
     <div id="hud">
         <div class="hud-titulo">QuadTree · colisiones</div>
@@ -19,17 +56,16 @@
         <div class="hud-fila destacado"><span>Mejora</span><b id="hud-razon">-</b></div>
     </div>
 
+    <!-- Resultado del test de consultas espaciales -->
+    <div id="test-info" style="display:none"></div>
+
     <!-- Controles (#17) -->
     <div id="panel">
         <button id="btn-pausa">Pausar</button>
-        <button id="btn-reset">Reset</button>
+        <button id="btn-nuevo">Nuevo escenario</button>
 
         <label>Capacidad nodo: <span id="val-cap">4</span>
             <input type="range" id="slider-cap" min="1" max="16" value="4">
-        </label>
-
-        <label>N inicial (reset): <span id="val-n">300</span>
-            <input type="range" id="slider-n" min="10" max="3000" step="10" value="300">
         </label>
 
         <label class="check">

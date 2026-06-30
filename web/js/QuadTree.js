@@ -124,14 +124,15 @@ class QuadTree {
         }
     }
 
-    // dibuja las lineas de subdivision; colorea hojas por densidad (#11, #19)
-    dibujar(ctx, capacidad) {
+    // dibuja las lineas de subdivision; colorea hojas por densidad (#11, #19).
+    // soloLineas=true omite el relleno por densidad (util cuando hay overlays encima).
+    dibujar(ctx, capacidad, soloLineas = false) {
         const x0 = this.limite.x - this.limite.ancho;
         const y0 = this.limite.y - this.limite.alto;
         const w = this.limite.ancho * 2;
         const h = this.limite.alto * 2;
 
-        if (!this.dividido) {
+        if (!this.dividido && !soloLineas) {
             // relleno por densidad: mas particulas -> mas opaco
             const dens = Math.min(1, this.particulas.length / capacidad);
             if (dens > 0) {
@@ -145,10 +146,10 @@ class QuadTree {
         ctx.strokeRect(x0, y0, w, h);
 
         if (this.dividido) {
-            this.noroeste.dibujar(ctx, capacidad);
-            this.noreste.dibujar(ctx, capacidad);
-            this.suroeste.dibujar(ctx, capacidad);
-            this.sureste.dibujar(ctx, capacidad);
+            this.noroeste.dibujar(ctx, capacidad, soloLineas);
+            this.noreste.dibujar(ctx, capacidad, soloLineas);
+            this.suroeste.dibujar(ctx, capacidad, soloLineas);
+            this.sureste.dibujar(ctx, capacidad, soloLineas);
         }
     }
 }
